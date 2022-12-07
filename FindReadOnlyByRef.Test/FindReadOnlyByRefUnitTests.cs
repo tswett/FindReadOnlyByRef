@@ -2,12 +2,10 @@
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using System.Threading.Tasks;
 using Microsoft.CodeAnalysis.Testing;
-using VerifyCS = FindReadOnlyByRef.Test.CSharpCodeFixVerifier<
-    FindReadOnlyByRef.FindReadOnlyByRefAnalyzer,
-    FindReadOnlyByRef.FindReadOnlyByRefCodeFixProvider>;
-using VerifyVB = FindReadOnlyByRef.Test.VisualBasicCodeFixVerifier<
-    FindReadOnlyByRef.FindReadOnlyByRefAnalyzer,
-    FindReadOnlyByRef.FindReadOnlyByRefCodeFixProvider>;
+using VerifyCS = FindReadOnlyByRef.Test.CSharpAnalyzerVerifier<
+    FindReadOnlyByRef.FindReadOnlyByRefAnalyzer>;
+using VerifyVB = FindReadOnlyByRef.Test.VisualBasicAnalyzerVerifier<
+    FindReadOnlyByRef.FindReadOnlyByRefAnalyzer>;
 
 namespace FindReadOnlyByRef.Test
 {
@@ -28,6 +26,32 @@ namespace FindReadOnlyByRef.Test
 
                 Class Program
                     Sub IncreaseByOne(ByRef x As Integer)
+                        x = x + 1
+                    End Sub
+
+                    Sub Main()
+                        Dim point As New Point
+                        IncreaseByOne({|#0:point.X|})
+                    End Sub
+                End Class";
+
+            await VerifyVB.VerifyAnalyzerAsync(test);
+        }
+
+        /// <summary>
+        /// The analyzer should accept a ReadOnly property passed by value.
+        /// </summary>
+        [TestMethod]
+        public async Task AcceptReadOnlyPropertyByVal()
+        {
+            var test = @"
+                Structure Point
+                    Public ReadOnly Property X As Integer
+                    Public ReadOnly Property Y As Integer
+                End Structure
+
+                Class Program
+                    Sub IncreaseByOne(x As Integer)
                         x = x + 1
                     End Sub
 
@@ -63,42 +87,28 @@ namespace FindReadOnlyByRef.Test
                     End Sub
                 End Class";
 
-            DiagnosticResult expected = VerifyVB.Diagnostic("FindReadOnlyByRef").WithLocation(0).WithArguments("point.X");
+            DiagnosticResult expected = VerifyVB.Diagnostic("FindReadOnlyByRef").WithLocation(0).WithArguments("property", "point.X");
             await VerifyVB.VerifyAnalyzerAsync(test, expected);
         }
 
         /// <summary>
-        /// The analyzer should reject a Private Set property passed by reference.
+        /// The analyzer should reject a property with no setter passed by reference.
         /// </summary>
-        /// <remarks>
-        /// Ideally, the analyzer should be smart enough to detect whether or
-        /// not the accessibility of a property allows it to be written to in
-        /// the exact context it's actually used in. I don't know how easy that
-        /// would be to implement.
-        /// </remarks>
         [TestMethod]
-        public async Task RejectPrivateSetPropertyByRef()
+        public async Task RejectNoSetterPropertyByRef()
         {
             var test = @"
                 Structure Point
-                    Private _X As Integer
-                    Public Property X As Integer
+                    Public ReadOnly Property X As Integer
                         Get
-                            Return _X
+                            Return 0
                         End Get
-                        Private Set(value As Integer)
-                            _X = value
-                        End Set
                     End Property
 
-                    Private _Y As Integer
-                    Public Property Y As Integer
+                    Public ReadOnly Property Y As Integer
                         Get
-                            Return _Y
+                            Return 0
                         End Get
-                        Private Set(value As Integer)
-                            _Y = value
-                        End Set
                     End Property
                 End Structure
 
@@ -113,7 +123,7 @@ namespace FindReadOnlyByRef.Test
                     End Sub
                 End Class";
 
-            DiagnosticResult expected = VerifyVB.Diagnostic("FindReadOnlyByRef").WithLocation(0).WithArguments("point.X");
+            DiagnosticResult expected = VerifyVB.Diagnostic("FindReadOnlyByRef").WithLocation(0).WithArguments("property", "point.X");
             await VerifyVB.VerifyAnalyzerAsync(test, expected);
         }
 
@@ -166,7 +176,7 @@ namespace FindReadOnlyByRef.Test
                     End Sub
                 End Class";
 
-            DiagnosticResult expected = VerifyVB.Diagnostic("FindReadOnlyByRef").WithLocation(0).WithArguments("point.X");
+            DiagnosticResult expected = VerifyVB.Diagnostic("FindReadOnlyByRef").WithLocation(0).WithArguments("field", "point.X");
             await VerifyVB.VerifyAnalyzerAsync(test, expected);
         }
     }

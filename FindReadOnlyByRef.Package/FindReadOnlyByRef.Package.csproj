@@ -27,7 +27,10 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\FindReadOnlyByRef.CodeFixes\FindReadOnlyByRef.CodeFixes.csproj" />
+    <PackageReference Include="Microsoft.CodeAnalysis.Common" Version="4.4.0" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\FindReadOnlyByRef\FindReadOnlyByRef.csproj" />
   </ItemGroup>
 
@@ -38,7 +41,6 @@
   <Target Name="_AddAnalyzersToOutput">
     <ItemGroup>
       <TfmSpecificPackageFile Include="$(OutputPath)\FindReadOnlyByRef.dll" PackagePath="analyzers/dotnet/cs" />
-      <TfmSpecificPackageFile Include="$(OutputPath)\FindReadOnlyByRef.CodeFixes.dll" PackagePath="analyzers/dotnet/cs" />
     </ItemGroup>
   </Target>
 

@@ -1,12 +1,12 @@
 ﻿using Microsoft.CodeAnalysis;
-using Microsoft.CodeAnalysis.CSharp;
-using Microsoft.CodeAnalysis.CSharp.Syntax;
+using Microsoft.CodeAnalysis.VisualBasic;
 using Microsoft.CodeAnalysis.Diagnostics;
 using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Linq;
 using System.Threading;
+using Microsoft.CodeAnalysis.VisualBasic.Syntax;
 
 namespace FindReadOnlyByRef
 {
@@ -33,20 +33,56 @@ namespace FindReadOnlyByRef
 
             // TODO: Consider registering other actions that act on syntax instead of or in addition to symbols
             // See https://github.com/dotnet/roslyn/blob/main/docs/analyzers/Analyzer%20Actions%20Semantics.md for more information
-            context.RegisterSymbolAction(AnalyzeSymbol, SymbolKind.NamedType);
+            context.RegisterSyntaxNodeAction(AnalyzeSyntax, SyntaxKind.SimpleArgument);
         }
 
-        private static void AnalyzeSymbol(SymbolAnalysisContext context)
+        private static void AnalyzeSyntax(SyntaxNodeAnalysisContext context)
         {
-            // TODO: Replace the following code with your own analysis, generating Diagnostic objects for any issues you find
-            var namedTypeSymbol = (INamedTypeSymbol)context.Symbol;
+            SimpleArgumentSyntax node = (SimpleArgumentSyntax)context.Node;
+            SemanticModel semanticModel = context.SemanticModel;
 
-            // Find just those named type symbols with names containing lowercase letters.
-            if (namedTypeSymbol.Name.ToCharArray().Any(char.IsLower))
+            bool isByRef = false;
+            string symbolType = "field or property";
+            bool isReadOnly = false;
+
+            ArgumentListSyntax argumentList = (ArgumentListSyntax)node.Parent;
+            int thisArgumentIndex = argumentList.Arguments.IndexOf(node);
+
+            if (argumentList.Parent is InvocationExpressionSyntax invocation)
             {
-                // For all such symbols, produce a diagnostic.
-                var diagnostic = Diagnostic.Create(Rule, namedTypeSymbol.Locations[0], namedTypeSymbol.Name);
+                SymbolInfo functionInfo = semanticModel.GetSymbolInfo(invocation.Expression);
+                if (functionInfo.Symbol is IMethodSymbol method)
+                {
+                    RefKind refKind = method.Parameters[thisArgumentIndex].RefKind;
+                    if (refKind != RefKind.None && refKind != RefKind.In)
+                        isByRef = true;
+                }
+            }
 
+            if (!isByRef)
+                return;
+
+            if (node.Expression is MemberAccessExpressionSyntax memberAccess)
+            {
+                // TODO: we want to check if the member is read-only
+                SymbolInfo memberInfo = semanticModel.GetSymbolInfo(memberAccess.Name);
+
+                if (memberInfo.Symbol is IPropertySymbol propertySymbol && propertySymbol.IsReadOnly)
+                {
+                    symbolType = "property";
+                    isReadOnly = true;
+                }
+
+                if (memberInfo.Symbol is IFieldSymbol fieldSymbol && fieldSymbol.IsReadOnly)
+                {
+                    symbolType = "field";
+                    isReadOnly = true;
+                }
+            }
+
+            if (isReadOnly)
+            {
+                Diagnostic diagnostic = Diagnostic.Create(Rule, node.GetLocation(), symbolType, node.GetText());
                 context.ReportDiagnostic(diagnostic);
             }
         }
