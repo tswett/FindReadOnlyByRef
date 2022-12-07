@@ -41,26 +41,63 @@ namespace FindReadOnlyByRef
             SimpleArgumentSyntax node = (SimpleArgumentSyntax)context.Node;
             SemanticModel semanticModel = context.SemanticModel;
 
-            bool isByRef = false;
-            string symbolType = "field or property";
-            bool isReadOnly = false;
+            if (!IsByRef(node, semanticModel))
+                return;
 
+            (bool isReadOnly, string symbolType) = IsReadOnly(node, semanticModel);
+
+            if (isReadOnly)
+            {
+                Diagnostic diagnostic = Diagnostic.Create(
+                    Rule,
+                    node.Expression.GetLocation(),
+                    symbolType,
+                    node.Expression.GetText());
+                context.ReportDiagnostic(diagnostic);
+            }
+        }
+
+        /// <summary>
+        /// Determine if the given argument is passed by reference.
+        /// </summary>
+        private static bool IsByRef(SimpleArgumentSyntax node, SemanticModel semanticModel)
+        {
             ArgumentListSyntax argumentList = (ArgumentListSyntax)node.Parent;
-            int thisArgumentIndex = argumentList.Arguments.IndexOf(node);
 
             if (argumentList.Parent is InvocationExpressionSyntax invocation)
             {
                 SymbolInfo functionInfo = semanticModel.GetSymbolInfo(invocation.Expression);
                 if (functionInfo.Symbol is IMethodSymbol method)
                 {
-                    RefKind refKind = method.Parameters[thisArgumentIndex].RefKind;
+                    IParameterSymbol thisParameter;
+
+                    if (node.IsNamed)
+                    {
+                        thisParameter = method.Parameters.First(parameter =>
+                            parameter.Name == node.NameColonEquals.Name.ToString());
+                    }
+                    else
+                    {
+                        int thisArgumentIndex = argumentList.Arguments.IndexOf(node);
+                        thisParameter = method.Parameters[thisArgumentIndex];
+                    }
+
+                    RefKind refKind = thisParameter.RefKind;
                     if (refKind != RefKind.None && refKind != RefKind.In)
-                        isByRef = true;
+                        return true;
                 }
             }
 
-            if (!isByRef)
-                return;
+            return false;
+        }
+
+        /// <summary>
+        /// Determine if the given argument is a read-only field or property.
+        /// </summary>
+        private static (bool isReadOnly, string symbolType) IsReadOnly(SimpleArgumentSyntax node, SemanticModel semanticModel)
+        {
+            string symbolType = "field or property";
+            bool isReadOnly = false;
 
             if (node.Expression is MemberAccessExpressionSyntax memberAccess)
             {
@@ -80,11 +117,7 @@ namespace FindReadOnlyByRef
                 }
             }
 
-            if (isReadOnly)
-            {
-                Diagnostic diagnostic = Diagnostic.Create(Rule, node.GetLocation(), symbolType, node.GetText());
-                context.ReportDiagnostic(diagnostic);
-            }
+            return (isReadOnly, symbolType);
         }
     }
 }

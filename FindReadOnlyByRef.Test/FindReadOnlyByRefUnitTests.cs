@@ -179,5 +179,88 @@ namespace FindReadOnlyByRef.Test
             DiagnosticResult expected = VerifyVB.Diagnostic("FindReadOnlyByRef").WithLocation(0).WithArguments("field", "point.X");
             await VerifyVB.VerifyAnalyzerAsync(test, expected);
         }
+
+        /// <summary>
+        /// The analyzer should accept a writable property passed by reference
+        /// as an out-of-order keyword argument.
+        /// </summary>
+        [TestMethod]
+        public async Task AcceptWritablePropertyByRefKeyword()
+        {
+            var test = @"
+                Structure Point
+                    Public Property X As Integer
+                    Public Property Y As Integer
+                End Structure
+
+                Class Program
+                    Sub IncreaseByAmount(ByRef x As Integer, amount As Integer)
+                        x = x + 1
+                    End Sub
+
+                    Sub Main()
+                        Dim point As New Point
+                        IncreaseByAmount(amount:=5, x:={|#0:point.X|})
+                    End Sub
+                End Class";
+
+            await VerifyVB.VerifyAnalyzerAsync(test);
+        }
+
+        /// <summary>
+        /// The analyzer should accept a ReadOnly property passed by value as
+        /// an out-of-order keyword argument.
+        /// </summary>
+        [TestMethod]
+        public async Task AcceptReadOnlyPropertyByValKeyword()
+        {
+            var test = @"
+                Structure Point
+                    Public ReadOnly Property X As Integer
+                    Public ReadOnly Property Y As Integer
+                End Structure
+
+                Class Program
+                    Sub IncreaseByAmount(ByRef x As Integer, amount As Integer)
+                        x = x + 1
+                    End Sub
+
+                    Sub Main()
+                        Dim point As New Point
+                        Dim temp As Integer = 0
+                        IncreaseByAmount(amount:={|#0:point.X|}, x:=temp)
+                    End Sub
+                End Class";
+
+            await VerifyVB.VerifyAnalyzerAsync(test);
+        }
+
+        /// <summary>
+        /// The analyzer should reject a ReadOnly property passed by reference
+        /// as an out-of-order keyword argument.
+        /// </summary>
+        [TestMethod]
+        public async Task RejectReadOnlyPropertyByRefKeyword()
+        {
+            var test = @"
+                Structure Point
+                    Public ReadOnly Property X As Integer
+                    Public ReadOnly Property Y As Integer
+                End Structure
+
+                Class Program
+                    Sub IncreaseByAmount(ByRef x As Integer, amount As Integer)
+                        x = x + 1
+                    End Sub
+
+                    Sub Main()
+                        Dim point As New Point
+                        IncreaseByAmount(amount:=5, x:={|#0:point.X|})
+                    End Sub
+                End Class";
+
+            DiagnosticResult expected = VerifyVB.Diagnostic("FindReadOnlyByRef").WithLocation(0).WithArguments("property", "point.X");
+            await VerifyVB.VerifyAnalyzerAsync(test, expected);
+        }
     }
 }
