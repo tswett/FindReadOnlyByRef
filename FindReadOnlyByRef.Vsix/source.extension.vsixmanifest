@@ -2,8 +2,8 @@
 <PackageManifest Version="2.0.0" xmlns="http://schemas.microsoft.com/developer/vsx-schema/2011" xmlns:d="http://schemas.microsoft.com/developer/vsx-schema-design/2011">
   <Metadata>
     <Identity Id="FindReadOnlyByRef.07b44fa5-e595-419a-af8b-34e94cad5ef5" Version="1.0" Language="en-US" Publisher="tswett"/>
-    <DisplayName>FindReadOnlyByRef</DisplayName>
-    <Description xml:space="preserve">This is a sample diagnostic extension for the .NET Compiler Platform ("Roslyn").</Description>
+    <DisplayName>Find ReadOnly ByRef</DisplayName>
+    <Description xml:space="preserve">This analyzer finds places in Visual Basic code where a ReadOnly property has been passed into a ByRef parameter.</Description>
   </Metadata>
   <Installation>
     <InstallationTarget Id="Microsoft.VisualStudio.Community" Version="[15.0,)" />
