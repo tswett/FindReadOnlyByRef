@@ -69,18 +69,24 @@ namespace FindReadOnlyByRef
                 SymbolInfo functionInfo = semanticModel.GetSymbolInfo(invocation.Expression);
                 if (functionInfo.Symbol is IMethodSymbol method)
                 {
-                    IParameterSymbol thisParameter;
+                    IParameterSymbol thisParameter = null;
 
                     if (node.IsNamed)
                     {
-                        thisParameter = method.Parameters.First(parameter =>
+                        thisParameter = method.Parameters.FirstOrDefault(parameter =>
                             parameter.Name == node.NameColonEquals.Name.ToString());
                     }
                     else
                     {
                         int thisArgumentIndex = argumentList.Arguments.IndexOf(node);
-                        thisParameter = method.Parameters[thisArgumentIndex];
+                        if (thisArgumentIndex < method.Parameters.Length)
+                            thisParameter = method.Parameters[thisArgumentIndex];
                     }
+
+                    // If we couldn't find the parameter for some reason, the
+                    // best we can do is just accept it.
+                    if (thisParameter == null)
+                        return false;
 
                     RefKind refKind = thisParameter.RefKind;
                     if (refKind != RefKind.None && refKind != RefKind.In)
@@ -101,7 +107,6 @@ namespace FindReadOnlyByRef
 
             if (node.Expression is MemberAccessExpressionSyntax memberAccess)
             {
-                // TODO: we want to check if the member is read-only
                 SymbolInfo memberInfo = semanticModel.GetSymbolInfo(memberAccess.Name);
 
                 if (memberInfo.Symbol is IPropertySymbol propertySymbol && propertySymbol.IsReadOnly)
