@@ -112,6 +112,135 @@ namespace FindReadOnlyByRef.Test
         }
 
         /// <summary>
+        /// The analyzer should accept a writable property passed by reference
+        /// if that property is accessed through another writable property.
+        /// </summary>
+        [TestMethod]
+        public async Task AcceptIndirectWritablePropertyByRef()
+        {
+            var test = @"
+                Structure MutableInteger
+                    Public Property Value As Integer
+                End Structure
+
+                Structure Point
+                    Public Property X As MutableInteger
+                    Public Property Y As MutableInteger
+                End Structure
+
+                Class Program
+                    Sub IncreaseByOne(ByRef x As Integer)
+                        x = x + 1
+                    End Sub
+
+                    Sub Main()
+                        Dim point As New Point
+                        IncreaseByOne({|#0:point.X|}.Value)
+                    End Sub
+                End Class";
+
+            await VerifyVB.VerifyAnalyzerAsync(test);
+        }
+
+        /// <summary>
+        /// The analyzer should reject a property passed by reference if that
+        /// property is on a struct and it's accessed through a ReadOnly
+        /// property.
+        /// </summary>
+        [TestMethod]
+        public async Task RejectIndirectReadOnlyPropertyByRef()
+        {
+            var test = @"
+                Structure MutableInteger
+                    Public Property Value As Integer
+                End Structure
+
+                Structure Point
+                    Public ReadOnly Property X As MutableInteger
+                    Public ReadOnly Property Y As MutableInteger
+                End Structure
+
+                Class Program
+                    Sub IncreaseByOne(ByRef x As Integer)
+                        x = x + 1
+                    End Sub
+
+                    Sub Main()
+                        Dim point As New Point
+                        IncreaseByOne({|#0:point.X|}.Value)
+                    End Sub
+                End Class";
+
+            DiagnosticResult expected = VerifyVB.Diagnostic("FindReadOnlyByRef").WithLocation(0).WithArguments("property", "point.X");
+            await VerifyVB.VerifyAnalyzerAsync(test, expected);
+        }
+
+        /// <summary>
+        /// The analyzer should accept a property passed by reference if that
+        /// property is on a class, even if it's accessed through a ReadOnly
+        /// property.
+        /// </summary>
+        [TestMethod]
+        public async Task AcceptClassIndirectReadOnlyPropertyByRef()
+        {
+            var test = @"
+                Class MutableInteger
+                    Public Property Value As Integer
+                End Class
+
+                Structure Point
+                    Public ReadOnly Property X As MutableInteger
+                    Public ReadOnly Property Y As MutableInteger
+                End Structure
+
+                Class Program
+                    Sub IncreaseByOne(ByRef x As Integer)
+                        x = x + 1
+                    End Sub
+
+                    Sub Main()
+                        Dim point As New Point
+                        IncreaseByOne({|#0:point.X|}.Value)
+                    End Sub
+                End Class";
+
+            await VerifyVB.VerifyAnalyzerAsync(test);
+        }
+
+        /// <summary>
+        /// The analyzer should reject a ReadOnly property passed by reference
+        /// if that property is accessed through another property, even if that
+        /// other property is writable.
+        /// </summary>
+        [TestMethod]
+        public async Task RejectReadOnlyPropertyOfPropertyByRef()
+        {
+            var test = @"
+                Structure ImmutableInteger
+                    Public ReadOnly Property Value As Integer
+                End Structure
+
+                Structure Point
+                    Public Property X As ImmutableInteger
+                    Public Property Y As ImmutableInteger
+                End Structure
+
+                Class Program
+                    Sub IncreaseByOne(ByRef x As Integer)
+                        x = x + 1
+                    End Sub
+
+                    Sub Main()
+                        Dim point As New Point
+                        IncreaseByOne({|#0:point.X.Value|})
+                    End Sub
+                End Class";
+
+            DiagnosticResult expected = VerifyVB.Diagnostic("FindReadOnlyByRef").WithLocation(0).WithArguments("property", "point.X.Value");
+            await VerifyVB.VerifyAnalyzerAsync(test, expected);
+        }
+
+        /// <summary>
         /// The analyzer should reject a property with no setter passed by reference.
         /// </summary>
         [TestMethod]

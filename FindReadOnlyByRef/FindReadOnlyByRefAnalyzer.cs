@@ -62,15 +62,15 @@ namespace FindReadOnlyByRef
             if (!IsByRef(node, semanticModel))
                 return;
 
-            (bool isReadOnly, string symbolType) = IsReadOnly(node, semanticModel);
+            (bool isReadOnly, string symbolType, ExpressionSyntax expression) = IsReadOnly(node, semanticModel);
 
             if (isReadOnly)
             {
                 Diagnostic diagnostic = Diagnostic.Create(
                     Rule,
-                    node.Expression.GetLocation(),
+                    expression.GetLocation(),
                     symbolType,
-                    node.Expression.GetText());
+                    expression.GetText());
                 context.ReportDiagnostic(diagnostic);
             }
         }
@@ -118,29 +118,48 @@ namespace FindReadOnlyByRef
         /// <summary>
         /// Determine if the given argument is a read-only field or property.
         /// </summary>
-        private static (bool isReadOnly, string symbolType) IsReadOnly(SimpleArgumentSyntax node, SemanticModel semanticModel)
+        /// <returns>
+        /// isReadOnly is true if this node is a read-only field or property.
+        /// symbolType is "field" for a field and "property" for a property.
+        /// expression is the exact expression which we found to be read-only.
+        /// </returns>
+        private static (bool isReadOnly, string symbolType, ExpressionSyntax expression) IsReadOnly(SimpleArgumentSyntax node, SemanticModel semanticModel)
         {
-            string symbolType = "field or property";
-            bool isReadOnly = false;
+            ExpressionSyntax currentExpression = node.Expression;
 
-            if (node.Expression is MemberAccessExpressionSyntax memberAccess)
+            while (currentExpression is MemberAccessExpressionSyntax memberAccess)
             {
                 SymbolInfo memberInfo = semanticModel.GetSymbolInfo(memberAccess.Name);
 
-                if (memberInfo.Symbol is IPropertySymbol propertySymbol && propertySymbol.IsReadOnly)
-                {
-                    symbolType = "property";
-                    isReadOnly = true;
-                }
+                if (memberInfo.Symbol == null)
+                    return (false, "(???)", null);
 
-                if (memberInfo.Symbol is IFieldSymbol fieldSymbol && fieldSymbol.IsReadOnly)
-                {
-                    symbolType = "field";
-                    isReadOnly = true;
-                }
+                ISymbol symbol = memberInfo.Symbol;
+
+                if (symbol is IPropertySymbol propertySymbol && propertySymbol.IsReadOnly)
+                    return (true, "property", currentExpression);
+
+                if (symbol is IFieldSymbol fieldSymbol && fieldSymbol.IsReadOnly)
+                    return (true, "field", currentExpression);
+
+                // Suppose we're looking at an expression of the form
+                // someObject.SomeMember. If we've reached this point, we know
+                // that SomeMember is writable in general. If someObject is a
+                // reference type, then someObject.SomeMember is definitely
+                // writable, so we're done.
+
+                if (symbol.ContainingType.IsReferenceType)
+                    return (false, "(???)", null);
+
+                // At this point, we know that someObject is a value type, so
+                // now we need to figure out whether or not someObject itself
+                // is read-only. To do that, assign it to currentExpression and
+                // then loop.
+
+                currentExpression = memberAccess.Expression;
             }
 
-            return (isReadOnly, symbolType);
+            return (false, "(???)", null);
         }
     }
 }
